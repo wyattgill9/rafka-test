@@ -26,6 +26,7 @@ sleep 3
 
 # Start producer
 cd "$(pwd)" && cargo run --bin start_producer &
+sleep 3
 
 echo "All components started in background!"
 echo "Use 'jobs' to see running processes"
