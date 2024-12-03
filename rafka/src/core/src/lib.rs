@@ -11,6 +11,8 @@ pub use error::{Error, Result};
 pub use config::{Config, FromEnv};
 pub use thread_pool::ThreadPool;
 
+pub const PROTOCOL_VERSION: u32 = 1;
+
 impl From<Box<bincode::ErrorKind>> for Error {
     fn from(error: Box<bincode::ErrorKind>) -> Self {
         Error::Serialization(error.to_string())  

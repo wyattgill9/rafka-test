@@ -7,6 +7,7 @@ use rafka_core::Error;
 use bincode;
 use uuid;
 use tokio::net::tcp::OwnedWriteHalf;
+use rafka_core::PROTOCOL_VERSION;
 
 pub struct StatelessBroker {
     active_producers: DashMap<String, OwnedWriteHalf>,
@@ -43,35 +44,75 @@ impl StatelessBroker {
 
     async fn handle_connection(&self, mut socket: TcpStream) -> Result<()> {
         // Read connection type (producer/consumer)
-        let mut buf = [0u8; 1024];
-        let n = socket.read(&mut buf).await?;
+        let mut buf = [0u8; 8]; // Increased buffer for "producer" string
+        let n = socket.read_exact(&mut buf[..8]).await?;
+        
+        // Read protocol version
+        let mut version_buf = [0u8; 4];
+        socket.read_exact(&mut version_buf).await?;
+        let client_version = u32::from_be_bytes(version_buf);
+        
+        if client_version != PROTOCOL_VERSION {
+            socket.write_all(b"ERR").await?;
+            return Err(Error::InvalidInput("Protocol version mismatch".into()));
+        }
         
         let connection_type = std::str::from_utf8(&buf[..n])?;
+        
+        // Send acknowledgment
+        socket.write_all(b"ACK").await?;
+        
         match connection_type {
             "producer" => self.handle_producer(socket).await,
             "consumer" => self.handle_consumer(socket).await,
-            _ => Err(Error::InvalidConnectionType),
+            _ => {
+                socket.write_all(b"ERR").await?;
+                Err(Error::InvalidConnectionType)
+            }
         }
     }
 
     async fn route_message(&self, msg: Message) -> Result<()> {
         let partition = self.calculate_partition(&msg);
-        let consumers = self.discover_consumers(partition).await?;
+        tracing::info!("Routing message {} to partition {}", msg.id, partition);
         
-        let msg_bytes = bincode::serialize(&msg)?;
-        
-        for mut consumer in consumers {
-            let msg_bytes = msg_bytes.clone();
-            tokio::spawn(async move {
-                consumer.write_all(&msg_bytes).await
-            });
+        if let Some(consumers) = self.active_consumers.get(&partition.to_string()) {
+            let msg_bytes = bincode::serialize(&msg)?;
+            let msg_len = msg_bytes.len() as u32;
+            
+            let mut successful_delivery = false;
+            
+            for consumer in consumers.value() {
+                // Send message length first
+                if let Err(e) = consumer.try_write(&msg_len.to_be_bytes()) {
+                    tracing::error!("Failed to send message length to consumer: {}", e);
+                    continue;
+                }
+                
+                // Then send the actual message
+                if let Err(e) = consumer.try_write(&msg_bytes) {
+                    tracing::error!("Failed to send message to consumer: {}", e);
+                    continue;
+                }
+                
+                tracing::info!("Successfully delivered message {} to consumer on partition {}", msg.id, partition);
+                successful_delivery = true;
+            }
+            
+            if successful_delivery {
+                tracing::info!("Message {} successfully routed to at least one consumer", msg.id);
+                Ok(())
+            } else {
+                Err(Error::InvalidInput("Failed to deliver message to any consumer".into()))
+            }
+        } else {
+            tracing::warn!("No consumers available for partition {}", partition);
+            Err(Error::InvalidInput(format!("No consumers available for partition {}", partition)))
         }
-        
-        Ok(())
     }
 
     fn calculate_partition(&self, msg: &Message) -> u32 {
-        // Dynamic partition calculation based on message key
+        // Simple partition calculation based on message key
         match &msg.key {
             Some(key) => {
                 use std::collections::hash_map::DefaultHasher;
@@ -85,8 +126,7 @@ impl StatelessBroker {
     }
 
     pub fn get_partition_count(&self) -> u32 {
-        // Return a default partition count (you can adjust this value based on your needs)
-        32
+        32 // Default partition count
     }
 
     async fn discover_consumers(&self, partition: u32) -> Result<Vec<TcpStream>> {
@@ -115,15 +155,24 @@ impl StatelessBroker {
         let (mut read_half, write_half) = socket.into_split();
         let producer_id = uuid::Uuid::new_v4().to_string();
         
-        // Store write half for acknowledgments
+        tracing::info!("New producer connected with ID: {}", producer_id);
         self.active_producers.insert(producer_id.clone(), write_half);
         
-        let mut len_buf = [0u8; 4];
         loop {
-            // Read message length
-            match read_half.read_exact(&mut len_buf).await {
+            // Read message type
+            let mut type_buf = [0u8; 1];
+            match read_half.read_exact(&mut type_buf).await {
                 Ok(_) => {
+                    // Read message length
+                    let mut len_buf = [0u8; 4];
+                    if let Err(e) = read_half.read_exact(&mut len_buf).await {
+                        tracing::error!("Error reading message length: {}", e);
+                        break;
+                    }
+                    
                     let msg_len = u32::from_be_bytes(len_buf);
+                    tracing::debug!("Receiving message of length: {} bytes", msg_len);
+                    
                     let mut msg_buf = vec![0u8; msg_len as usize];
                     
                     // Read the actual message
@@ -134,14 +183,24 @@ impl StatelessBroker {
                     
                     match bincode::deserialize::<Message>(&msg_buf) {
                         Ok(message) => {
-                            if let Err(e) = self.route_message(message).await {
-                                tracing::error!("Failed to route message: {}", e);
-                                if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
-                                    producer.write_all(b"ERR").await?;
+                            tracing::info!("Received message ID: {} from producer {}", message.id, producer_id);
+                            
+                            // Only acknowledge after successful routing
+                            match self.route_message(message.clone()).await {
+                                Ok(_) => {
+                                    if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
+                                        producer.write_all(b"ACK").await?;
+                                        tracing::info!("Sent ACK to producer for message {}", message.id);
+                                    }
                                 }
-                            } else {
-                                if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
-                                    producer.write_all(b"ACK").await?;
+                                Err(e) => {
+                                    tracing::error!("Failed to route message {}: {}", message.id, e);
+                                    if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
+                                        let err_msg = e.to_string();
+                                        producer.write_all(b"ERR").await?;
+                                        producer.write_all(&(err_msg.len() as u32).to_be_bytes()).await?;
+                                        producer.write_all(err_msg.as_bytes()).await?;
+                                    }
                                 }
                             }
                         }
@@ -154,32 +213,37 @@ impl StatelessBroker {
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    // Connection closed normally
+                    tracing::info!("Producer {} disconnected", producer_id);
                     break;
                 }
                 Err(e) => {
-                    tracing::error!("Error reading message length: {}", e);
+                    tracing::error!("Error reading from producer {}: {}", producer_id, e);
                     break;
                 }
             }
         }
         
         self.active_producers.remove(&producer_id);
+        tracing::info!("Producer {} removed from active producers", producer_id);
         Ok(())
     }
 
-    async fn handle_consumer(&self, socket: TcpStream) -> Result<()> {
+    async fn handle_consumer(&self, mut socket: TcpStream) -> Result<()> {
         // Read partition assignment
         let mut buf = [0u8; 4];
-        let mut socket = socket;
         socket.read_exact(&mut buf).await?;
         let partition = u32::from_be_bytes(buf);
+        
+        let consumer_id = uuid::Uuid::new_v4().to_string();
+        tracing::info!("New consumer connected with ID: {} for partition {}", consumer_id, partition);
         
         // Store consumer
         if let Some(mut consumers) = self.active_consumers.get_mut(&partition.to_string()) {
             consumers.value_mut().push(socket);
+            tracing::info!("Added consumer {} to partition {}", consumer_id, partition);
         } else {
             self.active_consumers.insert(partition.to_string(), vec![socket]);
+            tracing::info!("Created new consumer group for partition {} with consumer {}", partition, consumer_id);
         }
         
         Ok(())

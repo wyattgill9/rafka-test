@@ -14,24 +14,18 @@ async fn main() -> Result<()> {
     let mut producer = Producer::connect(&config).await?;
     producer.identify().await?;
     
-    let mut interval = tokio::time::interval(Duration::from_secs(1));
-    loop {
-        interval.tick().await;
-        
-        let message = Message::new(
-            Some("test-key".as_bytes().to_vec()),
-            "Hello from producer!".as_bytes().to_vec(),
-        );
-        
-        if let Err(e) = producer.send(message).await {
-            tracing::error!("Failed to send message: {}", e);
-        }
-
-        if tokio::signal::ctrl_c().now_or_never().is_some() {
-            info!("Shutting down producer...");
-            break;
-        }
+    let message = Message::new(
+        Some("test-key".as_bytes().to_vec()),
+        "Hello from producer!".as_bytes().to_vec(),
+    );
+    
+    info!("Sending message with ID: {}", message.id);
+    if let Err(e) = producer.send(message).await {
+        tracing::error!("Failed to send message: {}", e);
     }
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    info!("Producer shutting down...");
 
     Ok(())
 } 
