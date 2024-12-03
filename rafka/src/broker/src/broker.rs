@@ -5,9 +5,12 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use rafka_core::Error;
 use bincode;
+use uuid;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::Result as IoResult;
 
 pub struct StatelessBroker {
-    active_producers: DashMap<String, TcpStream>,
+    active_producers: DashMap<String, OwnedWriteHalf>,
     active_consumers: DashMap<String, Vec<TcpStream>>,
     thread_pool: Arc<ThreadPool>,
     config: Config,
@@ -87,11 +90,20 @@ impl StatelessBroker {
         32
     }
 
-    async fn discover_consumers(&self, _partition: u32) -> Result<Vec<TcpStream>> {
-        // Implement your consumer discovery logic here
-        // - Query registered consumers for the given partition
-        // - Return a collection of consumers
-        todo!("Implement consumer discovery logic")
+    async fn discover_consumers(&self, partition: u32) -> Result<Vec<TcpStream>> {
+        if let Some(consumers) = self.active_consumers.get(&partition.to_string()) {
+            let mut result = Vec::new();
+            for consumer in consumers.value() {
+                // Create a new socket from the same connection
+                let socket_addr = consumer.peer_addr()?;
+                if let Ok(new_stream) = TcpStream::connect(socket_addr).await {
+                    result.push(new_stream);
+                }
+            }
+            Ok(result)
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     pub async fn start_metrics(&self) -> Result<()> {
@@ -100,13 +112,77 @@ impl StatelessBroker {
         Ok(())
     }
 
-    async fn handle_producer(&self, _socket: TcpStream) -> Result<()> {
-        // Implementation here
+    async fn handle_producer(&self, socket: TcpStream) -> Result<()> {
+        let (mut read_half, write_half) = socket.into_split();
+        let producer_id = uuid::Uuid::new_v4().to_string();
+        
+        // Store write half for acknowledgments
+        self.active_producers.insert(producer_id.clone(), write_half);
+        
+        let mut len_buf = [0u8; 4];
+        loop {
+            // Read message length
+            match read_half.read_exact(&mut len_buf).await {
+                Ok(_) => {
+                    let msg_len = u32::from_be_bytes(len_buf);
+                    let mut msg_buf = vec![0u8; msg_len as usize];
+                    
+                    // Read the actual message
+                    if let Err(e) = read_half.read_exact(&mut msg_buf).await {
+                        tracing::error!("Error reading message: {}", e);
+                        break;
+                    }
+                    
+                    match bincode::deserialize::<Message>(&msg_buf) {
+                        Ok(message) => {
+                            if let Err(e) = self.route_message(message).await {
+                                tracing::error!("Failed to route message: {}", e);
+                                if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
+                                    producer.write_all(b"ERR").await?;
+                                }
+                            } else {
+                                if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
+                                    producer.write_all(b"ACK").await?;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to deserialize message: {}", e);
+                            if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
+                                producer.write_all(b"ERR").await?;
+                            }
+                        }
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    // Connection closed normally
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!("Error reading message length: {}", e);
+                    break;
+                }
+            }
+        }
+        
+        self.active_producers.remove(&producer_id);
         Ok(())
     }
 
-    async fn handle_consumer(&self, _socket: TcpStream) -> Result<()> {
-        // Implementation here
+    async fn handle_consumer(&self, socket: TcpStream) -> Result<()> {
+        // Read partition assignment
+        let mut buf = [0u8; 4];
+        let mut socket = socket;
+        socket.read_exact(&mut buf).await?;
+        let partition = u32::from_be_bytes(buf);
+        
+        // Store consumer
+        if let Some(mut consumers) = self.active_consumers.get_mut(&partition.to_string()) {
+            consumers.value_mut().push(socket);
+        } else {
+            self.active_consumers.insert(partition.to_string(), vec![socket]);
+        }
+        
         Ok(())
     }
 }
