@@ -1,0 +1,21 @@
+[package]
+name = "rafka"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rafka-core = { path = "src/core" }
+rafka-broker = { path = "src/broker" }
+rafka-storage = { path = "src/storage" }
+rafka-network = { path = "src/network" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[workspace]
+members = [
+    "src/core",
+    "src/broker",
+    "src/storage",
+    "src/network"
+]

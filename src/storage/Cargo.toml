@@ -1,0 +1,10 @@
+[package]
+name = "rafka-storage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rafka-core = { path = "../core" }
+scylla = "0.8"
+bytes = "1.4"
+tracing = "0.1" 

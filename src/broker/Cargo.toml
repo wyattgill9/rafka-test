@@ -1,0 +1,12 @@
+[package]
+name = "rafka-broker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rafka-core = { path = "../core" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+dashmap = "5"
+rand = "0.8"
+async-trait = "0.1"

@@ -1,0 +1,11 @@
+[package]
+name = "rafka-network"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rafka-core = { path = "../core" }
+tokio = { version = "1", features = ["full"] }
+bytes = "1.4"
+tracing = "0.1"
+tokio-util = { version = "0.7", features = ["codec"] }
