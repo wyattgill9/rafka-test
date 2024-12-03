@@ -1,0 +1,34 @@
+[package]
+name = "rafka"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "start_producer"
+path = "src/bin/start_producer.rs"
+
+[[bin]]
+name = "start_consumer"
+path = "src/bin/start_consumer.rs"
+
+[[bin]]
+name = "start_broker"
+path = "src/bin/start_broker.rs"
+
+[dependencies]
+rafka-core = { path = "src/core" }
+rafka-broker = { path = "src/broker" }
+rafka-producer = { path = "src/producer" }
+rafka-consumer = { path = "src/consumer" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+futures-util = "0.3"
+
+[workspace]
+members = [
+    "src/core",
+    "src/producer",
+    "src/consumer",
+    "src/broker",
+]

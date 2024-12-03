@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rafka-alerts
+  namespace: rafka
+spec:
+  groups:
+  - name: rafka
+    rules:
+    - alert: RafkaBrokerDown
+      expr: up{job="rafka"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Rafka broker down"
+        description: "Broker {{ $labels.instance }} has been down for more than 5 minutes"
+    - alert: RafkaHighMemoryUsage
+      expr: container_memory_usage_bytes{container="rafka-broker"} > 1.8e9  # 1.8GB
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage"
+        description: "Broker {{ $labels.instance }} memory usage above 1.8GB" 
