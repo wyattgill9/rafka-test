@@ -6,13 +6,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use rafka_core::Error;
 use bincode;
 use uuid;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::io::Result as IoResult;
+use tokio::net::tcp::OwnedWriteHalf;
 
 pub struct StatelessBroker {
     active_producers: DashMap<String, OwnedWriteHalf>,
     active_consumers: DashMap<String, Vec<TcpStream>>,
-    thread_pool: Arc<ThreadPool>,
+    _thread_pool: Arc<ThreadPool>,
     config: Config,
 }
 
@@ -21,7 +20,7 @@ impl StatelessBroker {
         StatelessBroker {
             active_producers: DashMap::new(),
             active_consumers: DashMap::new(),
-            thread_pool: Arc::new(ThreadPool::new(32)),
+            _thread_pool: Arc::new(ThreadPool::new(32)),
             config,
         }
     }

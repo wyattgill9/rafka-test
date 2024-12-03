@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::future::Future;
 use crossbeam_queue::ArrayQueue;
 
+#[allow(dead_code)]
 pub struct ThreadPool {
     workers: Vec<Worker>,
     task_queue: Arc<ArrayQueue<Task>>,

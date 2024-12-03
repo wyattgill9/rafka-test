@@ -2,9 +2,7 @@ use rafka_core::{Message, Result, Config};
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
 use tokio::io::AsyncReadExt;
-use tracing::info;
 use rafka_core::Error;
-use tokio::time::error::Elapsed;
 
 pub struct Producer {
     stream: TcpStream,

@@ -2,7 +2,6 @@ use rafka_core::{Message, Result, Config};
 use tokio::net::TcpStream;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-use tracing::info;
 
 pub struct Consumer {
     stream: TcpStream,
