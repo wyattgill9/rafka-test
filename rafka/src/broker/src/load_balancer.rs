@@ -16,7 +16,7 @@ impl LoadBalancer {
     pub async fn select_node(&self, message_key: Option<&[u8]>) -> Result<String> {
         match self.strategy {
             LoadBalancingStrategy::ConsistentHashing => {
-                // Use consistent hashing for sticky routing when key present
+                //  consistent hashing for sticky routing when key present
                 if let Some(key) = message_key {
                     return self.consistent_hash_node(key);
                 }

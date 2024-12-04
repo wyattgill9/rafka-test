@@ -74,13 +74,13 @@ impl StatelessBroker {
 
     async fn route_message(&self, msg: Message) -> Result<()> {
         let partition = self.calculate_partition(&msg);
-        tracing::info!("Routing message {} to partition {}", msg.id, partition);
+        tracing::info!("Routing msg: {} to partition: {}", msg.id, partition);
         
         let partition_key = partition.to_string();
         
         // Get or create consumer group for partition
         if !self.active_consumers.contains_key(&partition_key) {
-            tracing::warn!("No consumers available for partition {}, message will be buffered", partition);
+            tracing::warn!("No consumers for partition {}. Message buffered.", partition);
             // TODO: Implement message buffering for when consumers aren't available
             return Ok(());  // Return Ok instead of Error to avoid producer failures
         }
@@ -94,7 +94,10 @@ impl StatelessBroker {
             for consumer in consumers.value() {
                 if let Ok(_) = consumer.try_write(&msg_len.to_be_bytes()) {
                     if let Ok(_) = consumer.try_write(&msg_bytes) {
-                        tracing::info!("Successfully delivered message {} to consumer on partition {}", msg.id, partition);
+                        if let Ok(peer_addr) = consumer.peer_addr() {
+                            tracing::info!("Successfully delivered msg: {} to consumer {} on partition {}", 
+                                msg.id, peer_addr, partition);
+                        }
                         successful_delivery = true;
                         break;  // Successfully delivered to one consumer
                     }
@@ -163,11 +166,11 @@ impl StatelessBroker {
         self.active_producers.insert(producer_id.clone(), write_half);
         
         loop {
-            // Read message type
+            //msg type
             let mut type_buf = [0u8; 1];
             match read_half.read_exact(&mut type_buf).await {
                 Ok(_) => {
-                    // Read message length
+                    //msg length
                     let mut len_buf = [0u8; 4];
                     if let Err(e) = read_half.read_exact(&mut len_buf).await {
                         tracing::error!("Error reading message length: {}", e);
@@ -179,7 +182,7 @@ impl StatelessBroker {
                     
                     let mut msg_buf = vec![0u8; msg_len as usize];
                     
-                    // Read the actual message
+                    // read message
                     if let Err(e) = read_half.read_exact(&mut msg_buf).await {
                         tracing::error!("Error reading message: {}", e);
                         break;
@@ -189,7 +192,7 @@ impl StatelessBroker {
                         Ok(message) => {
                             tracing::info!("Received message ID: {} from producer {}", message.id, producer_id);
                             
-                            // Only acknowledge after successful routing
+                            // acknowledge after successful routing
                             match self.route_message(message.clone()).await {
                                 Ok(_) => {
                                     if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
@@ -233,7 +236,7 @@ impl StatelessBroker {
     }
 
     async fn handle_consumer(&self, mut socket: TcpStream) -> Result<()> {
-        // Read partition assignment
+        // read partition assignment
         let mut buf = [0u8; 4];
         socket.read_exact(&mut buf).await?;
         let partition = u32::from_be_bytes(buf);
@@ -241,13 +244,13 @@ impl StatelessBroker {
         let consumer_id = uuid::Uuid::new_v4().to_string();
         tracing::info!("New consumer connected with ID: {} for partition {}", consumer_id, partition);
         
-        // Store consumer
+        // store consumer
         if let Some(mut consumers) = self.active_consumers.get_mut(&partition.to_string()) {
             consumers.value_mut().push(socket);
             tracing::info!("Added consumer {} to partition {}", consumer_id, partition);
         } else {
             self.active_consumers.insert(partition.to_string(), vec![socket]);
-            tracing::info!("Created new consumer group for partition {} with consumer {}", partition, consumer_id);
+            tracing::info!("Created new consumer group, partition:{} with consumer: {}", partition, consumer_id);
         }
         
         Ok(())

@@ -18,31 +18,31 @@ impl Broker {
     pub async fn start(&self) -> Result<()> {
         info!("Starting broker on port {}", self.config.broker_port);
         
-        // Create and bind TCP listener
+        // create + bind TCP listener
         let listener = TcpListener::bind(format!("127.0.0.1:{}", self.config.broker_port)).await?;
         
-        // Accept and handle connections
+        // accept and handle connections
         loop {
             match listener.accept().await {
                 Ok((mut socket, addr)) => {
                     info!("New connection from {}", addr);
                     tokio::spawn(async move {
-                        // Use a proper buffer for reading
+                        // proper buffer for reading
                         let mut buf = vec![0u8; 1024];
                         loop {
                             match socket.read(&mut buf).await {
                                 Ok(0) => {
-                                    // Connection closed normally
+                                    // closed normally
                                     info!("Connection from {} closed", addr);
                                     break;
                                 }
                                 Ok(n) => {
                                     info!("Received {} bytes from {}", n, addr);
-                                    // Instead of echoing, try to parse and handle the message properly
+                                    // Instead of echoing, parse and handle the message properly
                                     match String::from_utf8(buf[..n].to_vec()) {
                                         Ok(message) => {
                                             info!("Received message: {}", message);
-                                            // Acknowledge receipt instead of echoing
+                                            // ack receipt instead of echoing
                                             if let Err(e) = socket.write_all(b"ACK").await {
                                                 error!("Error sending ACK: {}", e);
                                                 break;

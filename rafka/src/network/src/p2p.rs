@@ -24,7 +24,7 @@ impl P2PNetwork {
     }
 
     async fn handle_peer_messages(&self, peer_id: String) -> Result<()> {
-        // Zero-copy message handling using RDMA when available
+        // zero-copy message handling using RDMA when available
         if let Some(rdma_connection) = self.setup_rdma() {
             rdma_connection.process_messages().await?;
         } else {
