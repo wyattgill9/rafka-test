@@ -3,6 +3,9 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+//MAYBE THIS IS NOT NEEDED bc were doing decentralized routing
+
+
 pub struct LoadBalancer {
     node_stats: Arc<DashMap<String, NodeStats>>,
     strategy: LoadBalancingStrategy,

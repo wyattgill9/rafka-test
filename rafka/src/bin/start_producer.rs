@@ -2,7 +2,7 @@ use rafka_core::{Config, Result, FromEnv, Message};
 use rafka_producer::Producer;
 use tracing::info;
 use tokio::time::Duration;
-use futures_util::FutureExt;
+// use futures_util::FutureExt;
 
 #[tokio::main]
 async fn main() -> Result<()> {

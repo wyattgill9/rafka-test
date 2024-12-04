@@ -17,8 +17,8 @@ impl Consumer {
         self.stream.write_all(b"consumer").await?;
         self.stream.write_all(&rafka_core::PROTOCOL_VERSION.to_be_bytes()).await?;
         
-        // Register for all partitions (0-31) for testing
-        for partition in 0..32u32 {
+        // Register for all partitions (0-31)
+        for partition in 1..32u32 {
             self.stream.write_all(&partition.to_be_bytes()).await?;
             
             // Wait for acknowledgment for each partition
@@ -29,7 +29,7 @@ impl Consumer {
                 b"ACK" => {
                     tracing::info!("Successfully registered for partition {}", partition);
                 }
-                _ => return Err(Error::InvalidInput("Failed to register for partition".into())),
+                _ => return Err(Error::InvalidInput(format!("Failed to register for partition {}", partition))),
             }
         }
         
