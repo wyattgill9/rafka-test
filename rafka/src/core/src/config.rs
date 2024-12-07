@@ -9,8 +9,9 @@ pub struct Config {
     pub producer_port: u16,
     pub consumer_port: u16,
     pub cache_ttl: u64,
-    pub partition_count: usize,
+    pub partition_count: u32,
     pub replication_factor: usize,
+    pub node_id: String,
 }
 
 pub trait FromEnv {
@@ -51,6 +52,8 @@ impl FromEnv for Config {
                 .unwrap_or_else(|_| "3".to_string())
                 .parse()
                 .map_err(|e: std::num::ParseIntError| Error::Config(e.to_string()))?,
+            node_id: env::var("RAFKA_NODE_ID")
+                .unwrap_or_else(|_| "node_1".to_string()),
         })
     }
 } 

@@ -1,4 +1,5 @@
-use rafka_core::{Message, Result, ThreadPool, Config};
+use rafka_core::{Message, NetworkMessage, MessageType, Result, Config};
+use crate::partition::PartitionManager;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -8,21 +9,82 @@ use bincode;
 use uuid;
 use tokio::net::tcp::OwnedWriteHalf;
 use rafka_core::PROTOCOL_VERSION;
+use tokio::sync::broadcast;
 
 pub struct StatelessBroker {
+    node_id: String,
+    config: Config,
+    partition_manager: Arc<PartitionManager>,
     active_producers: DashMap<String, OwnedWriteHalf>,
     active_consumers: DashMap<String, Vec<TcpStream>>,
-    thread_pool: Arc<ThreadPool>,
-    config: Config,
+    message_channels: DashMap<u32, broadcast::Sender<Message>>, // partition -> channel
 }
 
 impl StatelessBroker {
     pub fn new(config: Config) -> Self {
-        StatelessBroker {
+        Self {
+            node_id: uuid::Uuid::new_v4().to_string(),
+            config: config.clone(),
+            partition_manager: Arc::new(PartitionManager::new(config.partition_count)),
             active_producers: DashMap::new(),
             active_consumers: DashMap::new(),
-            thread_pool: Arc::new(ThreadPool::new(32)),
-            config,
+            message_channels: DashMap::new(),
+        }
+    }
+
+    pub async fn handle_network_message(&self, msg: NetworkMessage) -> Result<()> {
+        match msg.msg_type {
+            MessageType::Produce => self.handle_produce(msg.payload).await,
+            MessageType::Fetch => self.handle_fetch(msg.payload).await,
+            MessageType::PartitionTransfer => self.handle_partition_transfer(msg).await,
+            MessageType::JoinNetwork => self.handle_node_join(msg).await,
+            MessageType::LeaveNetwork => self.handle_node_leave(msg).await,
+            MessageType::Heartbeat => self.handle_heartbeat(msg).await,
+            MessageType::JoinGroup => self.handle_join_group(msg).await,
+            MessageType::MetadataRequest => self.handle_metadata_request(msg).await,
+        }
+    }
+
+    async fn handle_produce(&self, message: Message) -> Result<()> {
+        let partition = self.partition_manager.get_partition_for_message(&message)?;
+        
+        // Get or create message channel for partition
+        let sender = self.message_channels
+            .entry(partition)
+            .or_insert_with(|| {
+                let (tx, _) = broadcast::channel(1000);
+                tx
+            });
+
+        // Replicate to backup nodes first
+        self.replicate_message(partition, &message).await?;
+
+        // Send to local subscribers
+        sender.send(message.clone())
+            .map_err(|e| Error::Broker(format!("Failed to broadcast message: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn replicate_message(&self, partition: u32, message: &Message) -> Result<()> {
+        let replica_nodes = self.partition_manager.get_replica_nodes(partition)?;
+        let replica_count = replica_nodes.len();
+        
+        let mut tasks = Vec::new();
+        for node in replica_nodes {
+            let msg = message.clone();
+            let task = tokio::spawn(async move {
+                // Send replication request to node
+                // Wait for acknowledgment
+            });
+            tasks.push(task);
+        }
+
+        let results = futures::future::join_all(tasks).await;
+        if results.iter().filter(|r| r.is_ok()).count() >= (replica_count / 2) {
+            Ok(())
+        } else {
+            Err(Error::Broker("Failed to replicate to majority".into()))
         }
     }
 
@@ -202,19 +264,18 @@ impl StatelessBroker {
                                 }
                                 Err(e) => {
                                     tracing::error!("Failed to route message {}: {}", message.id, e);
-                                    if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
-                                        let err_msg = e.to_string();
-                                        producer.write_all(b"ERR").await?;
-                                        producer.write_all(&(err_msg.len() as u32).to_be_bytes()).await?;
-                                        producer.write_all(err_msg.as_bytes()).await?;
+                                    if let Some(mut producer_ref) = self.active_producers.get_mut(&producer_id) {
+                                        producer_ref.value_mut().write_all(b"ERR").await?;
+                                        producer_ref.value_mut().write_all(&(e.to_string().len() as u32).to_be_bytes()).await?;
+                                        producer_ref.value_mut().write_all(e.to_string().as_bytes()).await?;
                                     }
                                 }
                             }
                         }
                         Err(e) => {
                             tracing::error!("Failed to deserialize message: {}", e);
-                            if let Some(mut producer) = self.active_producers.get_mut(&producer_id) {
-                                producer.write_all(b"ERR").await?;
+                            if let Some(mut producer_ref) = self.active_producers.get_mut(&producer_id) {
+                                producer_ref.value_mut().write_all(b"ERR").await?;
                             }
                         }
                     }
@@ -253,6 +314,35 @@ impl StatelessBroker {
             tracing::info!("Created new consumer group, partition:{} with consumer: {}", partition, consumer_id);
         }
         
+        Ok(())
+    }
+
+    async fn handle_fetch(&self, message: Message) -> Result<()> {
+        // TODO: Implement fetch logic
+        Ok(())
+    }
+
+    async fn handle_partition_transfer(&self, msg: NetworkMessage) -> Result<()> {
+        Ok(())
+    }
+
+    async fn handle_node_join(&self, msg: NetworkMessage) -> Result<()> {
+        Ok(())
+    }
+
+    async fn handle_node_leave(&self, msg: NetworkMessage) -> Result<()> {
+        Ok(())
+    }
+
+    async fn handle_heartbeat(&self, msg: NetworkMessage) -> Result<()> {
+        Ok(())
+    }
+
+    async fn handle_join_group(&self, msg: NetworkMessage) -> Result<()> {
+        Ok(())
+    }
+
+    async fn handle_metadata_request(&self, msg: NetworkMessage) -> Result<()> {
         Ok(())
     }
 }

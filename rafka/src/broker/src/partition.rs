@@ -1,41 +1,19 @@
-use crate::core::Result;
-use consistent_hash_ring::{HashRing, Node};
-use std::sync::Arc;
+use rafka_core::{Message, Result};
 
 pub struct PartitionManager {
-    ring: Arc<RwLock<HashRing<BrokerNode>>>,
-    partition_count: usize,
-    replication_factor: usize,
+    partition_count: u32,
 }
 
 impl PartitionManager {
-    pub fn new(partition_count: usize, replication_factor: usize) -> Self {
-        Self {
-            ring: Arc::new(RwLock::new(HashRing::new())),
-            partition_count,
-            replication_factor,
-        }
+    pub fn new(partition_count: u32) -> Self {
+        Self { partition_count }
     }
 
-    pub async fn get_partition_owners(&self, key: &[u8]) -> Vec<BrokerNode> {
-        let ring = self.ring.read().await;
-        ring.get_nodes(key, self.replication_factor)
+    pub fn get_partition_for_message(&self, msg: &Message) -> Result<u32> {
+        Ok(msg.headers.partition_hint.unwrap_or(0))
     }
 
-    pub async fn add_broker(&self, broker: BrokerNode) -> Result<()> {
-        let mut ring = self.ring.write().await;
-        ring.add_node(broker);
-        self.rebalance_partitions().await
-    }
-
-    async fn rebalance_partitions(&self) -> Result<()> {
-        // Minimal data movement during rebalancing (idk lol)
-        let ring = self.ring.read().await;
-        for partition in 0..self.partition_count {
-            let key = format!("partition-{}", partition);
-            let new_owners = ring.get_nodes(&key.as_bytes(), self.replication_factor);
-            // Implement rebalancing logic here (idk lol)
-        }
-        Ok(())
+    pub fn get_replica_nodes(&self, partition: u32) -> Result<Vec<String>> {
+        Ok(Vec::new())  // Implement replica node logic later
     }
 }

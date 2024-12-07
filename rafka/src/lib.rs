@@ -1,5 +1,6 @@
 pub use rafka_core::{Config, Result, FromEnv};
 use rafka_core::Error;
+use uuid;
 pub use rafka_broker::StatelessBroker;
 
 // Create a wrapper struct for configuration
@@ -26,8 +27,10 @@ impl ConfigBuilder {
             broker_port: parse_env("BROKER_PORT", "8080")? as u16,
             producer_port: parse_env("PRODUCER_PORT", "8081")? as u16,
             consumer_port: parse_env("CONSUMER_PORT", "8082")? as u16,
-            partition_count: parse_env("PARTITION_COUNT", "32")? as usize,
+            partition_count: parse_env("PARTITION_COUNT", "32")? as u32,
             replication_factor: parse_env("REPLICATION_FACTOR", "3")? as usize,
+            node_id: std::env::var("NODE_ID")
+                .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string()),
         })
     }
 }

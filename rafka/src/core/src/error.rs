@@ -17,6 +17,8 @@ pub enum Error {
     InvalidConnectionType,
     #[error("Serialization error: {0}")]
     Serialization(String),
+    #[error("Broker error: {0}")]
+    Broker(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

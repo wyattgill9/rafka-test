@@ -15,6 +15,7 @@ async fn main() -> Result<()> {
     producer.identify().await?;
     
     let message = Message::new(
+        "test-topic".to_string(),
         Some("test-key".as_bytes().to_vec()),
         "Hello from producer!".as_bytes().to_vec(),
     );

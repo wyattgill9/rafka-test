@@ -1,4 +1,5 @@
 mod broker;
+mod partition;
 pub use broker::StatelessBroker;
 
 use rafka_core::{Config, Result};
