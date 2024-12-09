@@ -36,8 +36,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t rafka-image ./rafka-test/rafka
-      working-directory: ./rafka-test
+        docker build -t rafka-image /rafka
 
     - name: Log in to Docker Hub (optional)
       uses: docker/login-action@v2
