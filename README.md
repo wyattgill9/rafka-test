@@ -1,212 +1,84 @@
 # Rafka
 
-Rafka is an blazingly fast experimental distributed async message broker written in Rust, currently in early development. It uses a experimental "Pastry" based, structure peer-to-peer broker "mesh" architecture with Redis/Memcached acting as a "sidecar" cache. Along with a Supernode/Ordinary node based system for distributed metadata. Designed to effortlessly deploy with Kubernetes, ensuring Maximum possible scalability, fault tolerance and efficiency.
+Rafka is a blazing-fast, experimental distributed asynchronous message broker written in Rust, currently in early development. It utalizes a peer-to-peer broker mesh architecture inspired by "Pastry," enabling Hyper-scalability and efficient message routing.  Each node contains a built ScyllaDB in-memory node acting as a "sidecar" for low-latency repetative/recent data access, while metadata management is orchestrated using a the DHT model for fault tolerance and seamless coordination.  Designed for effortless native deployment with Kubernetes, Rafka is built to scale dynamically, with no single point of failure, and operate with maximum efficiency in modern distributed environments.
 
 ## Current Status: Early Development
 
 This project is in active development and **Not ready for production use**. 
 
-#### We are Currently building a TCP version first, but we will migrate to gRPC after.
+## Rafka Development Checklist
 
-### What's Working
+### Development Phases
 
-- ✅ Basic client-server message routing
-- 🚧 ScyllaDB integration for persistence
-- 🚧 Redis/Memcached caching layer
-- 🚧Simple producer/consumer clients
--  Basic broker implementation
-- 🚧 Kubernetes deployment configs
+#### Phase 1: Core Foundation
+1. Basic P2P Communication
+   - [ ] Implement basic node-to-node communication
+   - [ ] Set up gRPC server and client foundations
+   - [ ] Create basic message structures
+   - [ ] Implement simple node discovery
 
-### Under Development
+2. Message Handling
+   - [ ] Develop async message queue
+   - [ ] Implement basic producer/consumer logic
+   - [ ] Create message storage interface
+   - [ ] Set up basic error handling
 
-- � Peer-to-peer networking
-- 🚧 Distributed broker coordination
-- 🚧 Advanced message routing
-- 🚧 Fault tolerance
-- 🚧 Production hardening
+#### Phase 2: Distributed Systems
+1. Consensus & Coordination
+   - [ ] Implement Raft consensus
+   - [ ] Develop leader election
+   - [ ] Create cluster state management
+   - [ ] Set up configuration sharing
 
-## Architecture
+2. Data Management
+   - [ ] Implement message replication
+   - [ ] Develop partition management
+   - [ ] Create data consistency checks
+   - [ ] Set up backup mechanisms
 
-Current implementation:
+#### Phase 3: Production Readiness
+1. Kubernetes Integration
+   - [ ] Create basic K8s deployment
+   - [ ] Implement StatefulSet configuration
+   - [ ] Set up service discovery
+   - [ ] Develop auto-scaling logic
 
-```plaintext
-                   ┌──────────────┐
-                   │    Broker    │
-┌──────────────┐   │              │   ┌──────────────┐
-│   Producer   │─▶│   Message    │──▶│   Consumer   │
-└──────────────┘   │   Routing    │   └──────────────┘
-                   └──────┬───────┘
-                          │
-                    ┌─────┴─────┐
-                    │  Storage  │
-                    │  Layer    │
-                    └─────┬─────┘
-                          │                       
-                    ┌─────▼─────┐           
-                    │   Redis/  │           
-                    │ Memcached │           
-                    └───────────┘
-```
+2. Monitoring & Reliability
+   - [ ] Set up basic metrics
+   - [ ] Implement health checks
+   - [ ] Create monitoring dashboards
+   - [ ] Develop alerting rules
 
-## Components
+#### Phase 4: Performance & Security
+1. Performance Optimization
+   - [ ] Implement message batching
+   - [ ] Add compression
+   - [ ] Optimize network usage
+   - [ ] Create caching layer
 
-### Broker
-**Currently implemented:**
-- Single-node message routing
-- Basic client connection handling
-- Simple message dispatching
-- Storage integration
+2. Security Implementation
+   - [ ] Add TLS encryption
+   - [ ] Implement authentication
+   - [ ] Set up authorization
+   - [ ] Create audit logging
 
-**Goal implementation:**
-- Multi-node structured peer-to-peer message routing and replication
-- Distributed metadata management
-- Advanced client connection handling
-- Advanced message dispatching
-- Advanced storage integration
+#### Phase 5: Client SDK & Documentation
+1. Client Development
+   - [ ] Create Rust client SDK
+   - [ ] Implement example applications
+   - [ ] Add client-side monitoring
+   - [ ] Develop client documentation
 
-### Storage
-**Currently supported:**
-- **Cache**: ScyllaDB
-
-**Goal implementation:**
-- **Cache**: Redis/Memcached/Skytable/ScyllaDB
-
-### Client Libraries
-Basic implementations for:
-- Producer client
-- Consumer client with simple acknowledgments
-
-## Getting Started
-
-### Prerequisites
-
-```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install dependencies
-sudo apt-get install -y build-essential protobuf-compiler
-
-# Start ScyllaDB (required)
-docker run -d --name scylla -p 9042:9042 scylladb/scylla
-
-# Start Redis (optional, for caching)
-docker run -d --name redis -p 6379:6379 redis
-```
-
-### Quick Start
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/rafka.git
-cd rafka
-
-# Set environment variables
-export RAFKA_PORT=8080
-export RAFKA_NODES=localhost:9042
-export RAFKA_KEYSPACE=default
-export RAFKA_CACHE_TTL=60
-
-# Start all components
-./scripts/start.sh
-```
-
-### Basic Usage
-
-Start a broker:
-```rust
-// src/bin/start_broker.rs
-#[tokio::main]
-async fn main() -> Result<()> {
-    let config = Config::from_env()?;
-    let broker = StatelessBroker::new(config);
-    broker.start().await?;
-    Ok(())
-}
-```
-
-Send a message:
-```rust
-// Example producer usage
-let mut producer = Producer::connect(&config).await?;
-producer.send(Message::new(
-    "test-topic",
-    "test-key",
-    "Hello World!".as_bytes(),
-)).await?;
-```
-
-Receive messages:
-```rust
-// Example consumer usage
-let mut consumer = Consumer::connect(&config).await?;
-while let Some(msg) = consumer.receive().await? {
-    println!("Received: {:?}", msg);
-    consumer.acknowledge(msg.id).await?;
-}
-```
-
-## Configuration
-
-Current environment variables:
-
-```bash
-# Required
-RAFKA_PORT=8080              # Broker port
-RAFKA_NODES=localhost:9042   # ScyllaDB nodes
-RAFKA_KEYSPACE=default       # ScyllaDB keyspace
-
-# Optional
-RAFKA_CACHE_TTL=60          # Cache TTL in seconds
-RUST_LOG=info               # Log level
-```
-
-## Development
-
-```bash
-# Run tests
-cargo test
-
-# Run with hot reload
-cargo watch -x run
-
-# Format code
-cargo fmt
-```
-
-## Roadmap
-
-1. **Phase 1 - In Progress**
-   - ✅ (Very) Basic message routing
-   - 🚧 ScyllaDB integration
-   - 🚧Simple client libraries
-
-2. **Phase 2 - In Progress**
-   - 🚧 Peer-to-peer networking
-   - 🚧 Distributed coordination
-   - 🚧 Advanced routing
-
-3. **Phase 3 - Planned**
-   - 📋 Fault tolerance
-   - 📋 Production hardening
-   - 📋 Performance optimization
+2. Documentation
+   - [ ] Write getting started guide
+   - [ ] Create API documentation
+   - [ ] Develop deployment guide
+   - [ ] Add troubleshooting guide
 
 ## Contributing
 
-We welcome all contributions! The project is in very early stages, so there are many areas to help:
-
-1. Core broker functionality
-2. Storage engine optimizations
-3. P2P networking implementation
-4. Documentation improvements
-5. Test coverage
-6. Kubernetes deployment configs
-7. Client libraries
-8. Performance optimizations
-9. Bug fixes
-10. Feature requests
+We welcome all contributions! The project is in very early stages, so there are many areas to help; listed in the checklist above.
 
 ## License
 
 Apache License 2.0 - See [LICENSE](./LICENSE) for details.
-```
