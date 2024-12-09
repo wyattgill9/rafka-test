@@ -2,10 +2,7 @@
 FROM rust:alpine as builder
 
 # Install necessary dependencies for building the Rust project
-RUN apk add --no-cache \
-    build-base \   
-    libssl3 \
-    ca-certificates
+RUN apk add --no-cache musl-dev
 
 # Set the working directory inside the container
 WORKDIR /usr/src/rafka
@@ -14,7 +11,8 @@ WORKDIR /usr/src/rafka
 COPY . .
 
 # Build the application
-RUN cargo build --release
+RUN cargo build --release --target x86_64-unknown-linux-musl
+
 
 # Create a smaller final image based on Alpine
 FROM alpine:latest
@@ -24,11 +22,14 @@ RUN apk add --no-cache \
     libssl3 \
     ca-certificates
 
+
 # Set the working directory
 WORKDIR /usr/local/bin
 
 # Copy the built executable from the builder image
-COPY --from=builder /usr/src/rafka/target/release/rafka .
+COPY --from=builder /usr/src/rafka/target/x86_64-unknown-linux-musl/release/rafka /usr/local/bin/rafka
+
+EXPOSE 8080
 
 # Run the application
-CMD ["./rafka"]
+CMD ["/usr/local/bin/rafka"]
