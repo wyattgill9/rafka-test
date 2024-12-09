@@ -1,22 +1,26 @@
-# Rafka Dockerfile
-FROM rust:1.82-alpine as builder
+# Use the official Rust image as the base image with Alpine
+FROM rust:stable-alpine AS builder
 
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache \
+    build-base \
+    libssl-dev \
+    ca-certificates
 
 WORKDIR /usr/src/rafka
 
 COPY . .
 
-RUN cargo build --release --target x86_64-unknown-linux-musl
+
+RUN cargo build --release
 
 FROM alpine:latest
 
 RUN apk add --no-cache \
-    libssl3 \
+    libssl1.1 \
     ca-certificates
 
-COPY --from=builder /usr/src/rafka/target/x86_64-unknown-linux-musl/release/rafka /usr/local/bin/rafka
+WORKDIR /usr/local/bin
 
-EXPOSE 8080
+COPY --from=builder /usr/src/rafka/target/release/rafka .
 
-CMD ["/usr/local/bin/rafka"]
+CMD ["./rafka"]
