@@ -35,6 +35,8 @@ jobs:
 
     - name: Build
       run: cargo build --verbose
+      working-directory: rafka/
 
     - name: Run tests
       run: cargo test --verbose
+      working-directory: rafka/
