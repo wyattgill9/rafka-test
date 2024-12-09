@@ -1,9 +1,9 @@
-# Use the official Rust image with Alpine, specific version 1.82
-FROM rust:1.82-alpine as builder
+# Use the official Rust image with Alpine (use rust:alpine or a specific version like rust:1.82-alpine)
+FROM rust:alpine as builder
 
 # Install necessary dependencies for building the Rust project
 RUN apk add --no-cache \
-    build-base \
+    build-base \   
     libssl3 \
     ca-certificates
 
