@@ -1,6 +1,6 @@
 # Rafka
 
-Rafka is an blazingly fast experimental distributed async message broker written in Rust, currently in early development. It uses a experimental "Pastry" based, structure pear-to-pear broker "mesh" architecture with Redis/Memcached acting as a "sidecar" cache. Along with a Supernode/Ordinary node based system for distributed metadata. Designed to effortlessly deploy with Kubernetes, ensuring Maximum possible scalability, fault tolerance and efficiency.
+Rafka is an blazingly fast experimental distributed async message broker written in Rust, currently in early development. It uses a experimental "Pastry" based, structure peer-to-peer broker "mesh" architecture with Redis/Memcached acting as a "sidecar" cache. Along with a Supernode/Ordinary node based system for distributed metadata. Designed to effortlessly deploy with Kubernetes, ensuring Maximum possible scalability, fault tolerance and efficiency.
 
 ## Current Status: Early Development
 
@@ -11,11 +11,11 @@ This project is in active development and **Not ready for production use**.
 ### What's Working
 
 - ✅ Basic client-server message routing
-- ✅ ScyllaDB integration for persistence
-- ✅ Redis/Memcached caching layer
-- ✅ Simple producer/consumer clients
-- ✅ Basic broker implementation
-- ✅ Kubernetes deployment configs
+- 🚧 ScyllaDB integration for persistence
+- 🚧 Redis/Memcached caching layer
+- 🚧Simple producer/consumer clients
+-  Basic broker implementation
+- 🚧 Kubernetes deployment configs
 
 ### Under Development
 

@@ -1,29 +1,8 @@
-use rafka::{StatelessBroker, Config, Result};
-use rafka_core::FromEnv;
-use tracing::info;
-use std::sync::Arc;
+use rafka_broker::Broker;
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    // init logging
-    tracing_subscriber::fmt::init();
-
-    // load config
-    let config = Config::from_env()?;
-
-    // create and start broker
-    let broker = StatelessBroker::new(config.clone());
-    info!("Starting broker with config: {:?}", config);
-
-    let broker = Arc::new(broker);
-    broker.clone().start_network().await?;
-
-    // metrics endpoint
-    broker.start_metrics().await?;
-
-    // shutdown signal
-    tokio::signal::ctrl_c().await?;
-    info!("Shutting down broker...");
-
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let broker = Broker::new();
+    broker.serve("127.0.0.1:50051").await?;
     Ok(())
-}
+} 

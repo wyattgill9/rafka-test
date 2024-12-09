@@ -1,0 +1,60 @@
+syntax = "proto3";
+package rafka;
+
+import "google/protobuf/timestamp.proto";
+
+service BrokerService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
+  rpc Publish(PublishRequest) returns (PublishResponse);
+  rpc Consume(ConsumeRequest) returns (stream ConsumeResponse);
+}
+
+message RegisterRequest {
+  string client_id = 1;
+  ClientType client_type = 2;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SubscribeRequest {
+  string consumer_id = 1;
+  string topic = 2;
+}
+
+message SubscribeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PublishRequest {
+  string producer_id = 1;
+  string topic = 2;
+  bytes payload = 3;
+}
+
+message PublishResponse {
+  string message_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message ConsumeRequest {
+  string consumer_id = 1;
+}
+
+message ConsumeResponse {
+  string message_id = 1;
+  string topic = 2;
+  bytes payload = 3;
+  google.protobuf.Timestamp sent_at = 4;
+}
+
+enum ClientType {
+  UNKNOWN = 0;
+  PRODUCER = 1;
+  CONSUMER = 2;
+} 

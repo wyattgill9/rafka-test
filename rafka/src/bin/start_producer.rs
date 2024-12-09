@@ -1,32 +1,19 @@
-use rafka_core::{Config, Result, FromEnv, Message};
 use rafka_producer::Producer;
-use tracing::info;
-use tokio::time::Duration;
-// use futures_util::FutureExt;
+use std::env;
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    let config = Config::from_env()?;
-    
-    info!("Starting producer with config: {:?}", config);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let message = env::args()
+        .nth(2)
+        .unwrap_or_else(|| "Hello, World!".to_string());
 
-    let mut producer = Producer::connect(&config).await?;
-    producer.identify().await?;
+    let mut producer = Producer::new("127.0.0.1:50051").await?;
     
-    let message = Message::new(
-        "test-topic".to_string(),
-        Some("test-key".as_bytes().to_vec()),
-        "Hello from producer!".as_bytes().to_vec(),
-    );
+    // Send hello world message
+    producer.send(
+        "hello".to_string(),
+        message.as_bytes().to_vec(),
+    ).await?;
     
-    info!("Sending message with ID: {}", message.id);
-    if let Err(e) = producer.send(message).await {
-        tracing::error!("Failed to send message: {}", e);
-    }
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    info!("Producer shutting down...");
-
     Ok(())
 } 

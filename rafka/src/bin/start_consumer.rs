@@ -1,22 +1,14 @@
-use rafka::{Config, Result, FromEnv};
 use rafka_consumer::Consumer;
-use tracing::info;
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    let config = Config::from_env()?;
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut consumer = Consumer::new("127.0.0.1:50051").await?;
     
-    info!("Starting consumer with config: {:?}", config);
-
-    // Connect and identify as consumer
-    let mut consumer = Consumer::connect(&config).await?;
-    consumer.identify().await?;
+    // Subscribe to the hello world topic
+    consumer.subscribe("hello".to_string()).await?;
     
-    // Read messages in a loop
-    while let Some(message) = consumer.receive().await? {
-        info!("Received message: {:?}", message);
-    }
-
+    // Start consuming messages
+    consumer.start_consuming().await?;
+    
     Ok(())
 } 
