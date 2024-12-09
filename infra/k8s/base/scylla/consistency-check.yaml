@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scylla-consistency-check
+spec:
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: consistency-check
+            image: scylladb/scylla:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              nodetool repair --full
+              nodetool verify
+              nodetool status
+          restartPolicy: OnFailure 

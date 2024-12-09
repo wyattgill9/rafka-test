@@ -1,0 +1,11 @@
+apiVersion: scylla.scylladb.com/v1alpha1
+kind: ScyllaRestore
+metadata:
+  name: disaster-recovery-restore
+spec:
+  backup: scheduled-backup
+  cluster: scylla-cluster
+  location: s3://your-backup-bucket/backups
+  verification:
+    enabled: true
+    consistencyLevel: ALL 

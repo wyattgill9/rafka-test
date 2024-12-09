@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rafka-monitor
+spec:
+  selector:
+    matchLabels:
+      app: rafka-test-alpine
+  endpoints:
+  - port: rafka-port
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: scylla-monitor
+spec:
+  selector:
+    matchLabels:
+      app: scylla
+  endpoints:
+  - port: metrics 

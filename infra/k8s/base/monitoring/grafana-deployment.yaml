@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
-  namespace: rafka
 spec:
   replicas: 1
   selector:
@@ -22,25 +21,11 @@ spec:
         - name: GF_SECURITY_ADMIN_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: rafka-secrets
-              key: GRAFANA_PASSWORD
+              name: grafana-secrets
+              key: admin-password
         volumeMounts:
         - name: grafana-storage
           mountPath: /var/lib/grafana
       volumes:
       - name: grafana-storage
-        persistentVolumeClaim:
-          claimName: grafana-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: grafana
-  namespace: rafka
-spec:
-  type: ClusterIP
-  ports:
-  - port: 3000
-    targetPort: 3000
-  selector:
-    app: grafana 
+        emptyDir: {} 

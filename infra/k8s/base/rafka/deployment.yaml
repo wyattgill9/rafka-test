@@ -1,0 +1,171 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rafka-test-alpine
+  labels:
+    app: rafka-test-alpine
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 3
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: rafka-test-alpine
+  template:
+    metadata:
+      labels:
+        app: rafka-test-alpine
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+      - name: rafka-test-alpine
+        image: wyattgill/rafka-test-alpine:latest
+        ports:
+        - containerPort: 8080
+          name: rafka-port
+        - containerPort: 2003
+          name: skytable-port
+        env:
+        - name: SCYLLA_POOL_SIZE_BASE
+          value: "8"
+        - name: SCYLLA_POOL_SIZE_MAX
+          value: "12"
+        - name: SCYLLA_POOL_TIMEOUT
+          value: "30000"
+        - name: SCYLLA_HOSTS
+          value: "scylla-cluster-dc1-rack1-0.scylla-cluster.default.svc.cluster.local,scylla-cluster-dc1-rack1-1.scylla-cluster.default.svc.cluster.local"
+        - name: RAFKA_NODE_TIMEOUT
+          value: "3000"
+        - name: RAFKA_KEEPALIVE
+          value: "15000"
+        - name: RAFKA_BATCH_SIZE
+          value: "1000"
+        - name: RAFKA_BATCH_TIMEOUT_MS
+          value: "100"
+        - name: RAFKA_MAX_CONCURRENT_REQUESTS
+          value: "5000"
+        - name: SCYLLA_CONNECTION_POOL_SIZE
+          value: "8"
+        - name: SCYLLA_MAX_REQUESTS_PER_CONNECTION
+          value: "2048"
+        - name: SCYLLA_WRITE_CONSISTENCY
+          value: "LOCAL_QUORUM"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          successThreshold: 2
+          failureThreshold: 2
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      - name: skytable
+        image: skytable/sdb:latest
+        ports:
+        - containerPort: 2003
+        resources:
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        volumeMounts:
+        - name: skytable-config
+          mountPath: /etc/skytable
+      
+      volumes:
+      - name: skytable-config
+        configMap:
+          name: skytable-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - rafka-test-alpine
+              topologyKey: kubernetes.io/hostname
+        # Try to schedule near ScyllaDB nodes for better latency
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - scylla
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - high-memory
+                - high-cpu
+      # Add TCP keepalive and buffer tuning
+      initContainers:
+      - name: sysctl-tuning
+        image: busybox
+        securityContext:
+          privileged: true
+        command:
+        - /bin/sh
+        - -c
+        - |
+          sysctl -w net.ipv4.tcp_keepalive_time=60
+          sysctl -w net.ipv4.tcp_keepalive_intvl=15
+          sysctl -w net.ipv4.tcp_keepalive_probes=6
+          sysctl -w net.core.rmem_max=16777216
+          sysctl -w net.core.wmem_max=16777216
+          sysctl -w net.ipv4.tcp_max_syn_backlog=4096
+          sysctl -w net.core.somaxconn=4096
+          sysctl -w net.ipv4.tcp_fin_timeout=30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: rafka-test-alpine

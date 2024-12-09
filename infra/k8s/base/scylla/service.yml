@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scylla-cluster
+spec:
+  clusterIP: None
+  selector:
+    app: scylla
+  ports:
+  - port: 9042
+    targetPort: 9042
+    name: cql
+  - port: 9180
+    targetPort: 9180
+    name: prometheus 

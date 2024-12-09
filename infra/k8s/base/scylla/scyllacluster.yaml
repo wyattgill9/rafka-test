@@ -1,0 +1,22 @@
+apiVersion: scylla.scylladb.com/v1
+kind: ScyllaCluster
+metadata:
+  name: scylla-cluster
+spec:
+  version: 4.5.0
+  repository: scylladb/scylla
+  cpuset: false
+  datacenter:
+    name: dc1
+    racks:
+    - name: rack1
+      members: 2
+      storage:
+        capacity: 5Gi
+      resources:
+        limits:
+          cpu: "1"
+          memory: 1Gi
+        requests:
+          cpu: "500m"
+          memory: 512Mi 

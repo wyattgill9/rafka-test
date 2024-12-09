@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rafka-scylla-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: rafka-test-alpine
+  policyTypes:
+  - Ingress
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: scylla
+    ports:
+    - protocol: TCP
+      port: 9042 

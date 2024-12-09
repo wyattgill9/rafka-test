@@ -1,53 +1,46 @@
 #!/bin/bash
 set -e
 
-NAMESPACE="rafka"
-CLUSTER_NAME="rafka-cluster"
-REGION="us-west-2"  # We can change this as needed
+# Base Path
+BASE_PATH="./k8s/base/"
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m'
+# Install ScyllaDB CRDs first
+echo "Installing ScyllaDB CRDs..." #FIX GITHUB AND ITS ALL GOOD!!!
+kubectl apply -f https://raw.githubusercontent.com/scylladb/scylla-operator/v1.7.2/config/crd/bases/scylla.scylladb.com_scyllaclusters.yaml
 
-log() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+# Wait a moment for CRD to register
+sleep 5
 
-error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-    exit 1
-}
+# Continue with rest of deployment...
+echo "Setting up In Memory Data Store configuration..."
+# kubectl apply -f "$BASE_PATH/skytable/config.yaml" OR REDIS OR MEMCACHED 
 
-command -v kubectl >/dev/null 2>&1 || error "kubectl is required but not installed"
+# Apply monitoring stack
+echo "Setting up monitoring..."
+kubectl apply -f "$BASE_PATH/monitoring/secrets.yaml"
+kubectl apply -f "$BASE_PATH/monitoring/prometheus-config.yaml"
+kubectl apply -f "$BASE_PATH/monitoring/prometheus-deployment.yaml"
+kubectl apply -f "$BASE_PATH/monitoring/grafana-deployment.yaml"
+kubectl apply -f "$BASE_PATH/monitoring/services.yaml"
 
-log "Creating namespace ${NAMESPACE}..."
-kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+# Apply Rafka resources
+echo "Deploying Rafka..."
+kubectl apply -f "$BASE_PATH/rafka/deployment.yaml"
+kubectl apply -f "$BASE_PATH/rafka/headless-service.yaml"
+kubectl apply -f "$BASE_PATH/rafka/hpa.yaml"
+kubectl apply -f "$BASE_PATH/rafka/pdb.yaml"
 
-log "Applying Rafka configurations..."
+# Apply ScyllaDB resources
+echo "Setting up ScyllaDB..."
+kubectl apply -f "$BASE_PATH/scylla/rbac.yaml"
+kubectl apply -f "$BASE_PATH/scylla/scylla-operator.yaml"
+kubectl wait --for=condition=ready pod -l app=scylla-operator --timeout=300s
+kubectl apply -f "$BASE_PATH/scylla/scyllacluster.yaml"
+kubectl apply -f "$BASE_PATH/scylla/service.yml"
 
-log "Setting up storage..."
-kubectl apply -f ../k8s/storage/storage-class.yaml
-kubectl apply -f ../k8s/storage/persistent-volumes.yaml
+echo "Deployment completed successfully!"
 
-log "Deploying core components..."
-kubectl apply -f ../k8s/core/configmap.yaml
-kubectl apply -f ../k8s/core/secrets.yaml
-kubectl apply -f ../k8s/core/service-accounts.yaml
+# Wait for all pods to be ready
+kubectl wait --for=condition=ready pod --all --timeout=300s
 
-log "Deploying Rafka broker..."
-kubectl apply -f ../k8s/broker/statefulset.yaml
-kubectl apply -f ../k8s/broker/service.yaml
-kubectl apply -f ../k8s/broker/hpa.yaml
-
-log "Setting up monitoring..."
-kubectl apply -f ../k8s/monitoring/alerts.yaml
-kubectl apply -f ../k8s/monitoring/grafana.yaml
-kubectl apply -f ../k8s/monitoring/prometheus.yaml
-
-log "Applying network policies..."
-kubectl apply -f ../k8s/network/policies.yaml
-
-log "Deployment complete! Waiting for pods to be ready..."
-kubectl wait --for=condition=ready pod -l app=rafka -n ${NAMESPACE} --timeout=300s
-
-log "Rafka deployment successful!" 
+echo "All systems are up and running!"

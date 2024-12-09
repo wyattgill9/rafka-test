@@ -1,42 +1,48 @@
 # Rafka Infrastructure
 
-## Production Checklist - WIP
+A distributed message broker system using Rafka, ScyllaDB, and Skytable.
 
-- [ ] Configure high availability
-- [ ] Setup backup strategy
-- [ ] Configure auto-scaling
-- [ ] Setup monitoring and alerts
-- [ ] Configure security policies
-- [ ] Setup CI/CD pipelines
-- [ ] Configure disaster recovery
+## Architecture Overview
 
-Deployment infrastructure for Rafka message broker.
+```mermaid
+graph TD
+    Client[External Clients] --> LB[Load Balancer]
+    subgraph Kubernetes Cluster
+        Ingress --> R1[Rafka Pod 1]
+        Ingress --> R2[Rafka Pod 2]
+        Ingress --> R3[Rafka Pod 3]
+        
+        subgraph "Per Rafka Pod"
+            R1 --> SC1[Skytable Sidecar 1]
+            R2 --> SC2[Skytable Sidecar 2]
+            R3 --> SC3[Skytable Sidecar 3]
+        end
+        
+        
+        R1 <--> R2
+        R2 <--> R3
+        R3 <--> R1
+        
+        R1 --> SC1
+        R2 --> SC2
+        R3 --> SC3
+    end
+```
 
 ## Components
 
-### Kubernetes Setup - WIP
-- High-availability broker deployment
-- Auto-scaling configurations
-- Storage class definitions
-- Network policies
-- P2P Service meshes
+### Rafka
+- Distributed message broker
+- Horizontal scaling with pod anti-affinity
+- Direct pod-to-pod communication via headless service
+- Connection pooling for ScyllaDB access
 
-### Terraform Modules - WIP
-- Cloud provider setup (AWS/GCP/Azure)
-- Network configuration
-- Security groups
-- Load balancers
-- Storage provisioning
+### In Memory Data Store
+- In-memory data store
+- Runs as sidecar in each Rafka pod
+- Optimized for fast local access
+- No persistence (memory-only)
 
-### Monitoring Stack - WIP
-- Prometheus for metrics
-- Grafana dashboards
-- Alert manager configuration
-
-### Docker 
-- Multi-stage build optimizations
-- Production Dockerfiles
-- Docker Compose for local development
 
 ## Directory Structure
 ```
@@ -94,3 +100,18 @@ kubectl logs -f <pod-name>    # Stream logs
    - Client-side load balancing for optimal performance
    - Network policies for security
 
+## Performance Optimization
+
+See [Performance Tuning Guide](docs/performance-tuning.md) for detailed information about:
+- Resource allocation
+- Connection pooling
+- Network optimization
+- Scaling guidelines
+
+## Operations
+
+See [Operations Guide](docs/operations.md) for:
+- Deployment procedures
+- Scaling operations
+- Backup and recovery
+- Troubleshooting 

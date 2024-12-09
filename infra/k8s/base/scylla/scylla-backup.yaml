@@ -1,0 +1,8 @@
+apiVersion: scylla.scylladb.com/v1alpha1
+kind: ScyllaBackup
+metadata:
+  name: scylla-backup
+spec:
+  cluster: scylla-cluster
+  location: s3://your-bucket/backups
+  schedule: "0 2 * * *"  # Daily at 2 AM, idk i just chose it
