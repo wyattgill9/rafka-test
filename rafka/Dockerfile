@@ -4,7 +4,7 @@ FROM rust:1.82-alpine as builder
 # Install necessary dependencies for building the Rust project
 RUN apk add --no-cache \
     build-base \
-    libssl-dev \
+    libssl3 \
     ca-certificates
 
 # Set the working directory inside the container
@@ -19,9 +19,9 @@ RUN cargo build --release
 # Create a smaller final image based on Alpine
 FROM alpine:latest
 
-# Install necessary runtime dependencies
+# Install necessary runtime dependencies (using libssl3 instead of libssl1.1)
 RUN apk add --no-cache \
-    libssl1.1 \
+    libssl3 \
     ca-certificates
 
 # Set the working directory
