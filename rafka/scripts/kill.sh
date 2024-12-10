@@ -16,8 +16,6 @@ kill_process() {
 }
 
 # Kill all Rafka processes
-kill_process "benchmark_consumer"
-kill_process "benchmark_producer"
 kill_process "start_broker"
 kill_process "start_consumer"
 kill_process "start_producer"
