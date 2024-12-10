@@ -14,13 +14,13 @@ This project is in active development and **Not ready for production use**.
 1. Basic P2P Communication
    - [ ] Implement basic node-to-node communication
    - [ ] Set up gRPC server and client foundations
-   - [ ] Create basic message structures
+   - [x] Create basic message structures
    - [ ] Implement simple node discovery
 
 2. Message Handling
    - [ ] Develop async message queue
-   - [ ] Implement basic producer/consumer logic
-   - [ ] Create message storage interface
+   - [x] Implement basic producer/consumer logic
+   - [ ] Create message storage functionality
    - [ ] Set up basic error handling
 
 #### Phase 2: Distributed Systems
