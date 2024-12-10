@@ -19,10 +19,12 @@ pub struct Broker {
     messages: Arc<RwLock<broadcast::Sender<ConsumeResponse>>>,
     message_counter: AtomicUsize,
     broadcast_capacity: usize,
+    partition_id: u32,
+    total_partitions: u32,
 }
 
 impl Broker {
-    pub fn new() -> Self {
+    pub fn new(partition_id: u32, total_partitions: u32) -> Self {
         const BROADCAST_CAPACITY: usize = 1024 * 16;
         let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
         
@@ -31,6 +33,8 @@ impl Broker {
             messages: Arc::new(RwLock::new(tx)),
             message_counter: AtomicUsize::new(0),
             broadcast_capacity: BROADCAST_CAPACITY,
+            partition_id,
+            total_partitions,
         }
     }
 
@@ -64,6 +68,15 @@ impl Broker {
 
         Ok(())
     }
+
+    fn owns_partition(&self, message_key: &str) -> bool {
+        let hash = self.hash_key(message_key);
+        hash % self.total_partitions == self.partition_id
+    }
+
+    fn hash_key(&self, key: &str) -> u32 {
+        key.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32))
+    }
 }
 
 #[tonic::async_trait]
@@ -73,6 +86,15 @@ impl BrokerService for Broker {
         request: Request<PublishRequest>,
     ) -> Result<Response<PublishResponse>, Status> {
         let req = request.into_inner();
+        
+        if !self.owns_partition(&req.producer_id) {
+            return Err(Status::failed_precondition(format!(
+                "Message belongs to partition {} not {}",
+                self.hash_key(&req.producer_id) % self.total_partitions,
+                self.partition_id
+            )));
+        }
+
         let msg_count = self.message_counter.fetch_add(1, Ordering::SeqCst);
         
         let response = ConsumeResponse {
@@ -88,10 +110,11 @@ impl BrokerService for Broker {
         let sender = self.ensure_channel().await;
         match sender.send(response.clone()) {
             Ok(_) => {
+                println!("Published message to partition {}", self.partition_id);
                 Ok(Response::new(PublishResponse {
                     message_id: response.message_id,
                     success: true,
-                    message: "Published successfully".to_string(),
+                    message: format!("Published successfully to partition {}", self.partition_id),
                 }))
             },
             Err(e) => {

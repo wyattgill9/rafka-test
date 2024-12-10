@@ -10,13 +10,14 @@ use chrono::{Utc, TimeZone};
 pub struct Consumer {
     id: String,
     client: BrokerServiceClient<Channel>,
+    partition_id: u32,
 }
 
 impl Consumer {
-    pub async fn new(broker_addr: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(broker_addr: &str, partition_id: u32) -> Result<Self, Box<dyn std::error::Error>> {
         let id = uuid::Uuid::new_v4().to_string();
         let client = BrokerServiceClient::connect(format!("http://{}", broker_addr)).await?;
-        let consumer = Self { id, client };
+        let consumer = Self { id, client, partition_id };
         consumer.register().await?;
         Ok(consumer)
     }
@@ -61,13 +62,15 @@ impl Consumer {
             .await?
             .into_inner();
 
-        println!("Consumer {} started consuming messages", self.id);
+        println!("Consumer {} started consuming messages on partition {}", 
+                self.id, self.partition_id);
 
         while let Some(message) = stream.next().await {
             match message {
                 Ok(msg) => {
                     println!(
-                        "Received message: {} on topic {} with payload: {}",
+                        "Partition {} received message: {} on topic {} with payload: {}",
+                        self.partition_id,
                         msg.message_id,
                         msg.topic,
                         String::from_utf8_lossy(&msg.payload)
