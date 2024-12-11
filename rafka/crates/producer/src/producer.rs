@@ -1,66 +1,47 @@
-use tonic::transport::Channel;
 use rafka_core::proto::rafka::{
     broker_service_client::BrokerServiceClient,
-    RegisterRequest, PublishRequest, ClientType,
+    PublishRequest, PublishResponse,
 };
+use tonic::Request;
+use uuid::Uuid;
 
 pub struct Producer {
-    id: String,
-    clients: Vec<BrokerServiceClient<Channel>>,
-    partition_count: u32,
+    client: BrokerServiceClient<tonic::transport::Channel>,
+    producer_id: String,
 }
 
 impl Producer {
-    pub async fn new(broker_addrs: &[String]) -> Result<Self, Box<dyn std::error::Error>> {
-        let id = uuid::Uuid::new_v4().to_string();
-        let mut clients = Vec::new();
-        
-        for addr in broker_addrs {
-            let client = BrokerServiceClient::connect(format!("http://{}", addr)).await?;
-            clients.push(client);
-        }
+    pub async fn new(addr: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let client = BrokerServiceClient::connect(format!("http://{}", addr)).await?;
+        let producer_id = Uuid::new_v4().to_string();
 
-        let producer = Self { 
-            id, 
-            clients,
-            partition_count: broker_addrs.len() as u32,
-        };
-        
-        producer.register_all().await?;
-        Ok(producer)
+        println!("Producer registered with ID: {}", producer_id);
+
+        Ok(Self {
+            client,
+            producer_id,
+        })
     }
 
-    pub async fn send(&mut self, topic: String, key: String, payload: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
-        let partition = self.get_partition(&key);
-        let client = &self.clients[partition as usize];
+    pub async fn publish(
+        &mut self,
+        topic: String,
+        message: String,
+        key: String,
+    ) -> Result<PublishResponse, Box<dyn std::error::Error>> {
+        let response = self.client
+            .publish(Request::new(PublishRequest {
+                producer_id: self.producer_id.clone(),
+                topic,
+                key,
+                payload: message,
+            }))
+            .await?;
 
-        println!("Sending message with key '{}' to partition {}", key, partition);
+        let result = response.into_inner();
+        println!("Message published to partition {} with offset {}", 
+            result.partition, result.offset);
 
-        let request = PublishRequest {
-            producer_id: key,  // Use the key for partition routing
-            topic,
-            payload,
-        };
-
-        let response = client.clone().publish(request).await?;
-        let response = response.into_inner();
-        Ok(response.message_id)
-    }
-
-    fn get_partition(&self, key: &str) -> u32 {
-        // Consistent hash-based partitioning
-        let hash: u32 = key.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-        hash % self.partition_count
-    }
-
-    async fn register_all(&self) -> Result<(), Box<dyn std::error::Error>> {
-        for client in &self.clients {
-            let request = RegisterRequest {
-                client_id: self.id.clone(),
-                client_type: ClientType::Producer as i32,
-            };
-            client.clone().register(request).await?;
-        }
-        Ok(())
+        Ok(result)
     }
 }

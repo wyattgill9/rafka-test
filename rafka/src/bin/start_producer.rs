@@ -26,8 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.to_string())
         .unwrap_or_else(|| "default-key".to_string());
 
-    let mut producer = Producer::new(&broker_addrs).await?;
     println!("Publishing to 'greetings' topic with key '{}': {}", key, message);
-    producer.send("greetings".to_string(), key, message.as_bytes().to_vec()).await?;
+    let mut producer = Producer::new(&broker_addrs[0]).await?;
+    producer.publish("greetings".to_string(), message, key).await?;
     Ok(())
 } 

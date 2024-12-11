@@ -1,114 +1,87 @@
-use tonic::transport::Channel;
-use futures::StreamExt;
 use rafka_core::proto::rafka::{
     broker_service_client::BrokerServiceClient,
-    RegisterRequest, SubscribeRequest, ConsumeRequest, ClientType,
+    ConsumeRequest, SubscribeRequest, AcknowledgeRequest, UpdateOffsetRequest,
+    RegisterRequest, ClientType,
 };
-use rafka_core::message::BenchmarkMetrics;
-use chrono::{Utc, TimeZone};
+use tonic::Request;
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
 pub struct Consumer {
-    id: String,
-    client: BrokerServiceClient<Channel>,
-    partition_id: u32,
+    client: BrokerServiceClient<tonic::transport::Channel>,
+    consumer_id: String,
+    _current_offset: i64,
 }
 
 impl Consumer {
-    pub async fn new(broker_addr: &str, partition_id: u32) -> Result<Self, Box<dyn std::error::Error>> {
-        let id = uuid::Uuid::new_v4().to_string();
-        let client = BrokerServiceClient::connect(format!("http://{}", broker_addr)).await?;
-        let consumer = Self { id, client, partition_id };
-        consumer.register().await?;
-        Ok(consumer)
-    }
+    pub async fn new(addr: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut client = BrokerServiceClient::connect(format!("http://{}", addr)).await?;
+        let consumer_id = Uuid::new_v4().to_string();
 
-    async fn register(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let request = RegisterRequest {
-            client_id: self.id.clone(),
-            client_type: ClientType::Consumer as i32,
-        };
-
-        self.client
-            .clone()
-            .register(request)
+        // Register consumer
+        client
+            .register(Request::new(RegisterRequest {
+                client_id: consumer_id.clone(),
+                client_type: ClientType::Consumer as i32,
+            }))
             .await?;
 
-        println!("Consumer registered with ID: {}", self.id);
+        println!("Consumer registered with ID: {}", consumer_id);
+
+        Ok(Self {
+            client,
+            consumer_id,
+            _current_offset: 0,
+        })
+    }
+
+    pub async fn subscribe(&mut self, topic: String) -> Result<(), Box<dyn std::error::Error>> {
+        self.client
+            .subscribe(Request::new(SubscribeRequest {
+                consumer_id: self.consumer_id.clone(),
+                topic,
+            }))
+            .await?;
         Ok(())
     }
 
-    pub async fn subscribe(&self, topic: String) -> Result<(), Box<dyn std::error::Error>> {
-        let request = SubscribeRequest {
-            consumer_id: self.id.clone(),
-            topic,
-        };
-
-        self.client
-            .clone()
-            .subscribe(request)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn start_consuming(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let request = ConsumeRequest {
-            consumer_id: self.id.clone(),
-        };
-
+    pub async fn consume(&mut self, topic: String) -> Result<mpsc::Receiver<String>, Box<dyn std::error::Error>> {
+        let (tx, rx) = mpsc::channel(100);
         let mut stream = self.client
-            .clone()
-            .consume(request)
+            .consume(Request::new(ConsumeRequest {
+                id: self.consumer_id.clone(),
+                topic: topic.clone(),
+            }))
             .await?
             .into_inner();
 
-        println!("Consumer {} started consuming messages on partition {}", 
-                self.id, self.partition_id);
+        let consumer_id = self.consumer_id.clone();
+        let mut client = self.client.clone();
 
-        while let Some(message) = stream.next().await {
-            match message {
-                Ok(msg) => {
-                    println!(
-                        "Partition {} received message: {} on topic {} with payload: {}",
-                        self.partition_id,
-                        msg.message_id,
-                        msg.topic,
-                        String::from_utf8_lossy(&msg.payload)
-                    );
-                }
-                Err(e) => eprintln!("Error receiving message: {}", e),
+        tokio::spawn(async move {
+            while let Ok(Some(message)) = stream.message().await {
+                let _ = tx.send(message.payload).await;
+                
+                // Acknowledge message
+                let _ = client
+                    .acknowledge(Request::new(AcknowledgeRequest {
+                        consumer_id: consumer_id.clone(),
+                        topic: topic.clone(),
+                        message_id: message.message_id,
+                    }))
+                    .await;
+
+                // Update offset
+                let _ = client
+                    .update_offset(Request::new(UpdateOffsetRequest {
+                        consumer_id: consumer_id.clone(),
+                        topic: topic.clone(),
+                        offset: message.offset,
+                    }))
+                    .await;
             }
-        }
+        });
 
-        Ok(())
-    }
-
-    pub async fn receive_benchmark(&mut self) -> Result<BenchmarkMetrics, Box<dyn std::error::Error>> {
-        let request = ConsumeRequest {
-            consumer_id: self.id.clone(),
-        };
-
-        let mut stream = self.client
-            .clone()
-            .consume(request)
-            .await?
-            .into_inner();
-
-        if let Some(msg) = stream.next().await {
-            let msg = msg?;
-            let received_at = Utc::now();
-            let sent_at = msg.sent_at
-                .map(|ts| Utc.timestamp_opt(ts.seconds, ts.nanos as u32).unwrap())
-                .unwrap_or_else(|| received_at);
-
-            Ok(BenchmarkMetrics {
-                message_id: msg.message_id,
-                sent_at,
-                received_at,
-                latency_ms: (received_at - sent_at).num_milliseconds()
-            })
-        } else {
-            Err("No message received".into())
-        }
+        Ok(rx)
     }
 }

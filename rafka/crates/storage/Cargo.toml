@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 rafka-core = { path = "../core" }
-scylla = "0.8"
 bytes = "1.4"
-tracing = "0.1" 
+tracing = "0.1"
+parking_lot = "0.12"
+dashmap = "5.5" 
+uuid = "1.3"
