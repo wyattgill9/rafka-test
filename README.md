@@ -20,7 +20,7 @@ This project is in active development and **Not ready for production use**.
 2. Message Handling
    - [ ] Develop async message queue
    - [x] Implement basic producer/consumer logic
-   - [ ] Create message storage functionality
+   - [x] Create very basic message storage functionality
    - [ ] Set up basic error handling
 
 #### Phase 2: Distributed Systems
