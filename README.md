@@ -1,6 +1,6 @@
 # Rafka
 
-Rafka is a blazing-fast, experimental distributed asynchronous message broker written in Rust, currently in early development. It utalizes a peer-to-peer broker mesh architecture inspired by "Pastry" and "Chord" enabling Hyper-scalability and efficient message routing.  Each broker node contains a built in custom in-memory database node acting as a "sidecar" for low-latency repetative/recent data access, while metadata management is orchestrated using a the DHT model for fault tolerance and seamless coordination.  Designed for effortless native deployment with Kubernetes, Rafka is built to scale dynamically, with no single point of failure, and operate with maximum efficiency in modern distributed environments.
+Rafka is a blazing-fast, experimental distributed asynchronous message broker written in Rust. It uses a peer-to-peer broker mesh architecture inspired by enabling Hyper-scalability and efficient message routing.  Each broker node contains a built in custom in-memory database node acting as a "sidecar" for low-latency repetative/recent data access, while metadata management is orchestrated using a the DHT model for fault tolerance and seamless coordination.  Designed for effortless native deployment with Kubernetes, Rafka is built to scale dynamically, with no single point of failure, and operate with maximum efficiency in modern distributed environments.
 
 ### Current Status: Early Development
 
